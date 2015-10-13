@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <cstring>
 #include <getopt.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -30,6 +31,7 @@
 #ifndef __SHARP_LCD_HPP__
 #define __SHARP_LCD_HPP__
 static uint8_t mode;
+
 /**
  * This driver is meant for the monochrome LCD display (model
  * no: LS013B4DN04) from Sharp.
@@ -48,33 +50,6 @@ static uint8_t mode;
  * LCD, the application first draws (bitmaps or text) into some
  * framebuffer memory, and then flushes the framebuffer to the LCD
  * over the serial interface.
- *
- * Here's some sample code to drive the LCD display:
- *
- *     DigitalOut led1(LED1);
- *     SharpLCD lcd(p9, MBED_SPI0);
- *
- *     uint8_t framebuffer[SharpLCD::SIZEOF_FRAMEBUFFER_FOR_ALLOC];
- *
- *     int main(void)
- *     {
- *         SharpLCD::FrameBuffer fb(framebuffer);
- *
- *         lcd.enableDisplay();
- *         lcd.clear();
- *         fb.printString(lookupFontFace("DejaVu Serif", 8),
- *                        20,
- *                        40,
- *                        BLACK,
- *                        "Rohit");
- *         lcd.drawFrameBuffer(fb);
- *
- *         led1 = 1;
- *         while (true) {
- *             wait(0.5);
- *             led1 = !led1;
- *         }
- *     }
  */
 
 class SharpLCD {
@@ -83,7 +58,7 @@ public:
 
     void clearScreen(void);
 
-    void writeLine(const uint8_t tx[]);
+    void writeLine(uint8_t line_number, uint8_t tx[]);
 
     void writeMultipleLines();
 
@@ -95,7 +70,7 @@ private:
     /**
      * Helper function to write out a buffer onto the LCD's SPI channel.
      */
-    void writeBuffer(const uint8_t *buffer, unsigned len);
+    void send(uint8_t *buffer, int len);
 
     void init(void);
     void parse_opts();
@@ -105,17 +80,22 @@ private:
     // port.
     static const uint8_t MLCD_WR = 0x80; //MLCD write line command
     static const uint8_t MLCD_CM = 0x20; //MLCD clear memory command
-    static const uint8_t MLCD_NO = 0x00; //MLCD NOP command (used to switch VCOM)
+    static const uint8_t MLCD_NO = 0x0; //MLCD NOP command (used to switch VCOM)
+
+    static const uint16_t TRAILER_LONG = 0x0000;
+    static const uint8_t TRAILER_SHORT = 0x00;
 
     //LCD resolution
-    static const int MLCD_XRES = 400; //pixels per horizontal line
-    static const int MLCD_YRES = 240; //pixels per vertical line
+    static const int MLCD_XRES = 96; //pixels per horizontal line
+    static const int MLCD_YRES = 96; //pixels per vertical line
     static const int MLCD_BYTES_LINE = MLCD_XRES / 8; //number of bytes in a line
     static const int MLCD_BUF_SIZE = MLCD_YRES * MLCD_BYTES_LINE;
+
     //defi nes the VCOM bit in the command word that goes to the LCD
     static const uint8_t VCOM_HI = 0x40;
     static const uint8_t VCOM_LO = 0x00;
 
+    bool frameInversion;
     uint8_t bits;
     uint32_t speed;
     uint16_t delay;

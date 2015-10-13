@@ -16,6 +16,19 @@
 
 #include "SharpLCD.hpp"
 
+static const bool test = true;
+
+SharpLCD::SharpLCD()
+{
+	frameInversion = false;
+	device = "/dev/spidev1.0";
+	speed = 1000000;
+	bits = 8;
+	mode = 3;
+	//parse_opts();
+	init();
+}
+
 static void pabort(const char *s)
 {
 	perror(s);
@@ -93,15 +106,7 @@ return;
 	}
 }
 
-SharpLCD::SharpLCD()
-{
-	device = "/dev/spidev1.0";
-	speed = 1000000;
-	bits = 8;
-	mode = 3;
-	//parse_opts();
-	init();
-}
+
 
 void
 SharpLCD::print_usage(const char *prog)
@@ -120,6 +125,37 @@ SharpLCD::print_usage(const char *prog)
 		     "  -3 --3wire    SI/SO signals shared\n");
 		exit(1);
 	}
+}
+
+void
+SharpLCD::send(uint8_t *buffer, int len)
+{
+	int ret;
+
+	uint8_t rx[len];
+
+	struct spi_ioc_transfer tr = {
+		tr.tx_buf = (unsigned long)buffer,
+		tr.rx_buf = (unsigned long)rx,
+		tr.len = len,
+		tr.delay_usecs = delay,
+		tr.speed_hz = speed,
+		tr.bits_per_word = bits,
+	};
+
+	ret = ioctl(fd, SPI_IOC_MESSAGE(1), &tr);
+
+	if (ret < 1)
+		pabort("can't send spi message");
+
+	for (ret = 0; ret < len; ret++) {
+		if (!(ret % 6))	{
+			puts("");
+		}
+		printf("%.2X ", rx[ret]);
+	}
+	puts("");
+	frameInversion = !frameInversion;
 }
 
 void
@@ -172,49 +208,26 @@ SharpLCD::init(void)
 void
 SharpLCD::clearScreen(void)
 {
-    const uint8_t buf[2] = {MLCD_CM, MLCD_NO};
+		const uint8_t vcom = frameInversion ? VCOM_HI : VCOM_LO;
+    uint8_t buf[] = {MLCD_CM | vcom, 0x00};
+		send(buf, 2);
 }
 
 void
-SharpLCD::writeLine(const uint8_t tx[])
+SharpLCD::writeLine(uint8_t line_number, uint8_t tx[])
 {
-	int ret;
+	const uint8_t vcom = frameInversion ? VCOM_HI : VCOM_LO;
 
-	const uint8_t transferData[] = {
-	    0xFF, 0xFF, 0xFF, 0xAA, 0xFF, 0xFF,
-	    0x40, 0x00, 0x00, 0x00, 0x00, 0x95,
-	    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	    0xDE, 0xAD, 0xBE, 0xEF, 0xBA, 0xAD,
-	    0xF0, 0x0D,
-	};
+	// add 4 bytes for the cmd byte, addr byte, and 2 trailer bytes
+	uint8_t line[MLCD_BYTES_LINE + 4];
 
+	memcpy(line + 2, tx, MLCD_BYTES_LINE * sizeof(uint8_t));
 
-	uint8_t rx[ARRAY_SIZE(transferData)] = {0, };
+	//*line >> 24;
+	line[0] = MLCD_WR;
+	line[1] = line_number;
 
-	struct spi_ioc_transfer tr = {
-		tr.tx_buf = (unsigned long)transferData,
-		tr.rx_buf = (unsigned long)rx,
-		tr.len = ARRAY_SIZE(transferData),
-		tr.delay_usecs = delay,
-		tr.speed_hz = speed,
-		tr.bits_per_word = bits,
-	};
-
-	ret = ioctl(fd, SPI_IOC_MESSAGE(1), &tr);
-
-	if (ret < 1)
-		pabort("can't send spi message");
-
-	for (ret = 0; ret < ARRAY_SIZE(rx); ret++) {
-		if (!(ret % 6))	{
-			puts("");
-		}
-
-		printf("%.2X ", rx[ret]);
-	}
-	puts("");
+	send(line, MLCD_BYTES_LINE + 4);
 }
 
 void
@@ -226,16 +239,15 @@ SharpLCD::writeMultipleLines(void)
 void
 SharpLCD::changeVCOM(void)
 {
-    static bool frameInversion = false;
     uint8_t buf[2] = {0, MLCD_NO};
 
-    uint8_t mode = VCOM_LO;
+    uint8_t new_vcom = VCOM_LO;
     if (frameInversion) {
-        mode |= VCOM_HI;
+        new_vcom |= VCOM_HI;
     }
     frameInversion = !frameInversion; /* toggle frameInversion in
                                        * preparation for the next call */
+    buf[0] = new_vcom;
 
-    buf[0] = mode;
-
+		send(buf, 2);
 }
