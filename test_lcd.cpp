@@ -9,15 +9,16 @@ int main(void) {
 
   for (int count = 0; count < numbers; count++)
   {
-    line[count] = count;
+    line[count] = 0b00001111;
   }
+
+  double interval = 0.01;
 
   while (true) {
     lcd.clearScreen();
-    usleep(1000);
-
-    lcd.writeLine(0xAA, line);
-    usleep(1000);
+    sleep(interval);
+    lcd.writeLine(0x0A, line);
+    sleep(interval);
   }
   return 0;
 }

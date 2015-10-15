@@ -30,7 +30,6 @@
 
 #ifndef __SHARP_LCD_HPP__
 #define __SHARP_LCD_HPP__
-static uint8_t mode;
 
 /**
  * This driver is meant for the monochrome LCD display (model
@@ -99,6 +98,8 @@ private:
     uint8_t bits;
     uint32_t speed;
     uint16_t delay;
+    uint8_t mode;
+    uint8_t lsb;
 
     const char *device;
 
